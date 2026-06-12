@@ -444,6 +444,47 @@
         font-size: 1rem;
       }
 
+      .editor-level-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .remove-level-button {
+        min-height: 34px;
+        border: 1px solid rgba(227, 29, 36, 0.28);
+        border-radius: 8px;
+        color: var(--brand-dark);
+        background: var(--brand-soft);
+        cursor: pointer;
+        font-size: 0.8rem;
+        font-weight: 900;
+      }
+
+      .level-controls {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .move-level-button {
+        min-width: 38px;
+        min-height: 34px;
+        border: 1px solid rgba(117, 108, 110, 0.26);
+        border-radius: 8px;
+        color: var(--ink);
+        background: white;
+        cursor: pointer;
+        font-weight: 950;
+      }
+
+      .editor-level.dragging {
+        opacity: 0.72;
+        outline: 2px solid var(--brand);
+      }
+
       .editor-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -924,30 +965,34 @@
       }, { passive: false });
 
       function cleanLevel(level, fallback) {
-        const source = level || fallback;
-        const cleanAnswer = String(source.answer || fallback.answer).replace(/[^a-z]/gi, "").toUpperCase();
+        const source = level || fallback || {};
+        const cleanAnswer = String(source.answer || fallback?.answer || "").replace(/[^a-z]/gi, "").toUpperCase();
 
         return {
           prefix: String(source.prefix || "").replace(/\s/g, "").toUpperCase(),
-          answer: cleanAnswer || fallback.answer,
+          answer: cleanAnswer || fallback?.answer || "KATA",
           suffix: String(source.suffix || "").replace(/\s/g, "").toUpperCase(),
-          hint: String(source.hint || fallback.hint)
+          hint: String(source.hint || fallback?.hint || "Tulis hint di sini")
         };
+      }
+
+      function cleanLevelList(rawLevels) {
+        const sourceLevels = Array.isArray(rawLevels) && rawLevels.length ? rawLevels : DEFAULT_LEVELS;
+        const cleaned = sourceLevels.map((level, index) => cleanLevel(level, DEFAULT_LEVELS[index] || DEFAULT_LEVELS[0]));
+        return cleaned.length ? cleaned : DEFAULT_LEVELS.map((level) => ({ ...level }));
       }
 
       function loadSavedLevels() {
         try {
           const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-          if (!Array.isArray(saved)) return DEFAULT_LEVELS.map((level) => ({ ...level }));
-
-          return DEFAULT_LEVELS.map((fallback, index) => cleanLevel(saved[index], fallback));
+          return cleanLevelList(saved);
         } catch (error) {
           return DEFAULT_LEVELS.map((level) => ({ ...level }));
         }
       }
 
       async function saveLevels(nextLevels) {
-        levels = DEFAULT_LEVELS.map((fallback, index) => cleanLevel(nextLevels[index], fallback));
+        levels = cleanLevelList(nextLevels);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(levels));
 
         if (!API_BASE) return;
@@ -982,7 +1027,7 @@
           if (!response.ok) throw new Error("Could not fetch shared quiz");
 
           const data = await response.json();
-          levels = DEFAULT_LEVELS.map((fallback, index) => cleanLevel(data.levels?.[index], fallback));
+          levels = cleanLevelList(data.levels);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(levels));
           loadLevel(0, !intro.classList.contains("hidden"));
         } catch (error) {
@@ -1028,8 +1073,17 @@
         levels.forEach((level, index) => {
           const fieldset = document.createElement("section");
           fieldset.className = "editor-level";
+          fieldset.draggable = true;
+          fieldset.dataset.index = index;
           fieldset.innerHTML = `
-            <h3>Level ${index + 1}</h3>
+            <div class="editor-level-header">
+              <h3>Level ${index + 1}</h3>
+              <div class="level-controls">
+                <button class="move-level-button" type="button" data-action="up" data-index="${index}" aria-label="Pindah level ke atas">↑</button>
+                <button class="move-level-button" type="button" data-action="down" data-index="${index}" aria-label="Pindah level ke bawah">↓</button>
+                <button class="remove-level-button" type="button" data-action="remove" data-index="${index}">Hapus</button>
+              </div>
+            </div>
             <div class="editor-grid">
               <div class="field">
                 <label for="level-${index}-prefix">Prefix</label>
@@ -1051,6 +1105,13 @@
           `;
           editorForm.appendChild(fieldset);
         });
+
+        const addButton = document.createElement("button");
+        addButton.className = "plain-button";
+        addButton.type = "button";
+        addButton.dataset.action = "add";
+        addButton.textContent = "Tambah Level";
+        editorForm.appendChild(addButton);
 
         const saveButton = document.createElement("button");
         saveButton.className = "start-button";
@@ -1105,12 +1166,49 @@
       }
 
       function readEditorLevels() {
-        return levels.map((level) => ({ ...level })).map((level, index) => {
+        const editorLevelCount = editorForm.querySelectorAll(".editor-level").length;
+        return Array.from({ length: editorLevelCount }, (_, index) => ({ ...(levels[index] || DEFAULT_LEVELS[0]) })).map((level, index) => {
           editorForm.querySelectorAll(`[data-index="${index}"]`).forEach((input) => {
+            if (!(input instanceof HTMLInputElement)) return;
             level[input.dataset.field] = input.value;
           });
           return level;
         });
+      }
+
+      function updateEditorLevels(nextLevels, status = "") {
+        levels = cleanLevelList(nextLevels);
+        renderEditorForm();
+        editorStatus.textContent = status;
+      }
+
+      function createBlankLevel() {
+        return {
+          prefix: "ID",
+          answer: "KATA",
+          suffix: "",
+          hint: "Tulis hint di sini"
+        };
+      }
+
+      function moveEditorLevel(fromIndex, toIndex) {
+        const draftLevels = readEditorLevels();
+        if (toIndex < 0 || toIndex >= draftLevels.length) return;
+
+        const [movedLevel] = draftLevels.splice(fromIndex, 1);
+        draftLevels.splice(toIndex, 0, movedLevel);
+        updateEditorLevels(draftLevels, `Level ${fromIndex + 1} dipindahkan.`);
+      }
+
+      function removeEditorLevel(index) {
+        const draftLevels = readEditorLevels();
+        if (draftLevels.length <= 1) {
+          editorStatus.textContent = "Minimal harus ada 1 level.";
+          return;
+        }
+
+        draftLevels.splice(index, 1);
+        updateEditorLevels(draftLevels, "Level dihapus.");
       }
 
       function wordLength() {
@@ -1463,6 +1561,68 @@
         renderEditorForm();
         editorStatus.textContent = "Quiz dikembalikan ke default.";
         setMessage("Quiz dikembalikan ke default.");
+      });
+
+      editorForm.addEventListener("click", (event) => {
+        const target = event.target.closest("[data-action]");
+        if (!(target instanceof HTMLElement)) return;
+
+        const draftLevels = readEditorLevels();
+        const index = Number(target.dataset.index);
+
+        if (target.dataset.action === "add") {
+          draftLevels.push(createBlankLevel());
+          updateEditorLevels(draftLevels, "Level baru ditambahkan.");
+          return;
+        }
+
+        if (target.dataset.action === "remove") {
+          removeEditorLevel(index);
+          return;
+        }
+
+        if (target.dataset.action === "up") {
+          moveEditorLevel(index, index - 1);
+          return;
+        }
+
+        if (target.dataset.action === "down") {
+          moveEditorLevel(index, index + 1);
+        }
+      });
+
+      editorForm.addEventListener("dragstart", (event) => {
+        const card = event.target.closest(".editor-level");
+        if (!(card instanceof HTMLElement)) return;
+
+        card.classList.add("dragging");
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", card.dataset.index);
+      });
+
+      editorForm.addEventListener("dragend", (event) => {
+        const card = event.target.closest(".editor-level");
+        if (card instanceof HTMLElement) {
+          card.classList.remove("dragging");
+        }
+      });
+
+      editorForm.addEventListener("dragover", (event) => {
+        if (event.target.closest(".editor-level")) {
+          event.preventDefault();
+        }
+      });
+
+      editorForm.addEventListener("drop", (event) => {
+        const card = event.target.closest(".editor-level");
+        if (!(card instanceof HTMLElement)) return;
+
+        event.preventDefault();
+        const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+        const toIndex = Number(card.dataset.index);
+        if (Number.isInteger(fromIndex) && Number.isInteger(toIndex) && fromIndex !== toIndex) {
+          moveEditorLevel(fromIndex, toIndex);
+        }
       });
 
       editorForm.addEventListener("submit", async (event) => {
