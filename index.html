@@ -383,10 +383,24 @@
         font-weight: 850;
       }
 
+      .editor-status {
+        min-height: 24px;
+        margin: 0;
+        color: var(--brand-dark);
+        font-weight: 850;
+        line-height: 1.4;
+      }
+
       .editor-form {
         display: grid;
         gap: 14px;
         margin-top: 14px;
+      }
+
+      .editor-form > .start-button {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
       }
 
       .editor-level {
@@ -776,6 +790,7 @@
         <h2 id="editorTitle">Edit Quiz</h2>
         <p>Ubah prefix, jawaban, suffix, dan hint tanpa edit code. Perubahan disimpan di browser ini.</p>
         <form class="editor-form" id="editorForm"></form>
+        <p class="editor-status" id="editorStatus" aria-live="polite"></p>
         <div class="editor-actions">
           <button class="plain-button" id="editorResetButton" type="button">Reset Default</button>
           <button class="plain-button" id="editorCloseButton" type="button">Tutup</button>
@@ -842,6 +857,7 @@
       const resetButton = document.querySelector("#resetButton");
       const editorModal = document.querySelector("#editorModal");
       const editorForm = document.querySelector("#editorForm");
+      const editorStatus = document.querySelector("#editorStatus");
       const editorResetButton = document.querySelector("#editorResetButton");
       const editorCloseButton = document.querySelector("#editorCloseButton");
 
@@ -909,7 +925,7 @@
             sessionStorage.removeItem(AUTH_SESSION_KEY);
             sessionStorage.removeItem(`${AUTH_SESSION_KEY}-credentials`);
             editorCredentials = null;
-            throw new Error("Login editor sudah habis. Tutup editor, login lagi, lalu simpan ulang.");
+            throw new Error("LOGIN_EXPIRED");
           }
 
           throw new Error("Gagal menyimpan quiz ke server.");
@@ -1002,6 +1018,7 @@
       }
 
       function openEditor() {
+        editorStatus.textContent = "";
         renderEditorForm();
         editorModal.classList.remove("hidden");
       }
@@ -1401,26 +1418,41 @@
         levels = DEFAULT_LEVELS.map((level) => ({ ...level }));
         loadLevel(0, false);
         renderEditorForm();
+        editorStatus.textContent = "Quiz dikembalikan ke default.";
         setMessage("Quiz dikembalikan ke default.");
       });
 
       editorForm.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const saveButton = editorForm.querySelector('button[type="submit"]');
         const nextLevels = readEditorLevels();
         const invalidLevel = nextLevels.findIndex((level) => !/[a-z]/i.test(level.answer));
 
         if (invalidLevel !== -1) {
+          editorStatus.textContent = `Jawaban level ${invalidLevel + 1} harus berisi huruf.`;
           setMessage(`Jawaban level ${invalidLevel + 1} harus berisi huruf.`);
           return;
         }
 
         try {
+          editorStatus.textContent = "Menyimpan quiz...";
+          saveButton.disabled = true;
           await saveLevels(nextLevels);
           loadLevel(0, false);
           closeEditor();
           setMessage(API_BASE ? "Quiz berhasil disimpan ke server." : "Quiz berhasil disimpan. Mulai dari level 1.");
         } catch (error) {
-          setMessage(error.message || "Gagal menyimpan quiz.");
+          if (error.message === "LOGIN_EXPIRED") {
+            closeEditor();
+            openLogin();
+            loginError.textContent = "Silakan login lagi, lalu simpan ulang.";
+            setMessage("Login editor diperlukan untuk menyimpan ke server.");
+          } else {
+            editorStatus.textContent = error.message || "Gagal menyimpan quiz.";
+            setMessage(error.message || "Gagal menyimpan quiz.");
+          }
+        } finally {
+          saveButton.disabled = false;
         }
       });
 
