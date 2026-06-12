@@ -71,6 +71,14 @@
         text-transform: uppercase;
       }
 
+      .brand-logo {
+        display: block;
+        width: min(100%, 180px);
+        max-height: 58px;
+        object-fit: contain;
+        object-position: left center;
+      }
+
       .logo-dot {
         width: 28px;
         height: 28px;
@@ -357,6 +365,10 @@
         word-break: break-word;
       }
 
+      .success-code:empty {
+        display: none;
+      }
+
       .success-claim {
         margin: 0;
         color: var(--muted);
@@ -489,6 +501,10 @@
           font-size: 1.05rem;
         }
 
+        .brand-logo {
+          max-height: 48px;
+        }
+
         .logo-dot {
           width: 24px;
           height: 24px;
@@ -588,6 +604,7 @@
     <div class="app">
       <aside class="brand-panel" aria-label="Indomoney">
         <div class="brand-mark">
+          <img class="brand-logo" id="brandLogo" src="indomoney-logo.png" alt="IndoMoney">
           <div class="logo-text"><span class="logo-dot">i</span><span>Indomoney</span></div>
           <p class="slogan">Aman, cepat, terpercaya</p>
         </div>
@@ -691,6 +708,7 @@
       const successCode = document.querySelector("#successCode");
       const successClaim = document.querySelector("#successClaim");
       const resultButton = document.querySelector("#resultButton");
+      const brandLogo = document.querySelector("#brandLogo");
       const startButton = document.querySelector("#startButton");
       const helpButton = document.querySelector("#helpButton");
       const resetButton = document.querySelector("#resetButton");
@@ -703,6 +721,14 @@
       let gameOver = false;
       let keyStatus = {};
       let resultAction = "retry";
+
+      brandLogo.addEventListener("load", () => {
+        brandLogo.nextElementSibling.classList.add("hidden");
+      });
+
+      brandLogo.addEventListener("error", () => {
+        brandLogo.classList.add("hidden");
+      });
 
       function wordLength() {
         return answer.length;
