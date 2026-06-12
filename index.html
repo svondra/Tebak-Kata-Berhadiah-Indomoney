@@ -376,6 +376,83 @@
         line-height: 1.5;
       }
 
+      .login-error {
+        min-height: 22px;
+        margin: 0;
+        color: var(--brand-dark);
+        font-weight: 850;
+      }
+
+      .editor-form {
+        display: grid;
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .editor-level {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid rgba(227, 29, 36, 0.18);
+        border-radius: 8px;
+        background: white;
+      }
+
+      .editor-level h3 {
+        margin: 0;
+        color: var(--brand-dark);
+        font-size: 1rem;
+      }
+
+      .editor-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .field {
+        display: grid;
+        gap: 5px;
+      }
+
+      .field.full {
+        grid-column: 1 / -1;
+      }
+
+      .field label {
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+
+      .field input {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 10px;
+        color: var(--ink);
+        background: #fff;
+        font: inherit;
+        font-weight: 750;
+      }
+
+      .editor-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .plain-button {
+        min-height: 46px;
+        border: 1px solid rgba(227, 29, 36, 0.28);
+        border-radius: 8px;
+        color: var(--brand-dark);
+        background: white;
+        cursor: pointer;
+        font-weight: 900;
+      }
+
       .confetti-layer {
         position: fixed;
         inset: 0;
@@ -548,6 +625,11 @@
           overflow: auto;
         }
 
+        .editor-grid,
+        .editor-actions {
+          grid-template-columns: 1fr;
+        }
+
         .statusbar {
           align-items: flex-start;
           flex-direction: column;
@@ -641,7 +723,7 @@
         <p>Tebak kata tengah dari kode kupon rahasia IndoMoney.</p>
         <ol>
           <li>Lihat pola kode kupon dan baca hint.</li>
-          <li>Ketik 5 huruf kata tengah, lalu tekan Enter.</li>
+          <li>Ketik kata tengah, lalu tekan Enter.</li>
           <li>Hijau berarti karakter benar dan posisinya tepat.</li>
           <li>Kuning berarti karakter ada di kode, tetapi posisinya belum tepat.</li>
           <li>Abu-abu berarti karakter tidak ada di kode.</li>
@@ -667,9 +749,47 @@
       </section>
     </div>
 
+    <div class="modal-backdrop hidden" id="loginModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+        <h2 id="loginTitle">Login Editor</h2>
+        <p>Masukkan ID dan password untuk mengubah quiz.</p>
+        <form class="editor-form" id="loginForm">
+          <div class="field">
+            <label for="loginId">ID</label>
+            <input id="loginId" autocomplete="username" required>
+          </div>
+          <div class="field">
+            <label for="loginPassword">Password</label>
+            <input id="loginPassword" type="password" autocomplete="current-password" required>
+          </div>
+          <p class="login-error" id="loginError" aria-live="polite"></p>
+          <button class="start-button" type="submit">Masuk</button>
+        </form>
+        <div class="editor-actions">
+          <button class="plain-button" id="loginCloseButton" type="button">Tutup</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop hidden" id="editorModal">
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="editorTitle">
+        <h2 id="editorTitle">Edit Quiz</h2>
+        <p>Ubah prefix, jawaban, suffix, dan hint tanpa edit code. Perubahan disimpan di browser ini.</p>
+        <form class="editor-form" id="editorForm"></form>
+        <div class="editor-actions">
+          <button class="plain-button" id="editorResetButton" type="button">Reset Default</button>
+          <button class="plain-button" id="editorCloseButton" type="button">Tutup</button>
+        </div>
+      </section>
+    </div>
+
     <script>
-      // Edit this block whenever you want to change the playable coupons.
-      const LEVELS = [
+      const STORAGE_KEY = "indomoney-tebak-kata-levels";
+      const AUTH_SESSION_KEY = "indomoney-editor-authenticated";
+      const EDITOR_ID = "indomoney";
+      const EDITOR_PASSWORD = "selenacantik";
+      const API_BASE = "";
+      const DEFAULT_LEVELS = [
         {
           prefix: "IDM",
           answer: "HUJAN",
@@ -690,6 +810,7 @@
         }
       ];
 
+      let levels = loadSavedLevels();
       const MAX_GUESSES = 6;
       const KEY_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
       const STATUS_RANK = { absent: 1, present: 2, correct: 3 };
@@ -703,24 +824,38 @@
       const intro = document.querySelector("#intro");
       const confettiLayer = document.querySelector("#confettiLayer");
       const successModal = document.querySelector("#successModal");
+      const loginModal = document.querySelector("#loginModal");
+      const loginForm = document.querySelector("#loginForm");
+      const loginId = document.querySelector("#loginId");
+      const loginPassword = document.querySelector("#loginPassword");
+      const loginError = document.querySelector("#loginError");
+      const loginCloseButton = document.querySelector("#loginCloseButton");
       const successTitle = document.querySelector("#successTitle");
       const successMessage = document.querySelector("#successMessage");
       const successCode = document.querySelector("#successCode");
       const successClaim = document.querySelector("#successClaim");
       const resultButton = document.querySelector("#resultButton");
+      const brandMark = document.querySelector(".brand-mark");
       const brandLogo = document.querySelector("#brandLogo");
       const startButton = document.querySelector("#startButton");
       const helpButton = document.querySelector("#helpButton");
       const resetButton = document.querySelector("#resetButton");
+      const editorModal = document.querySelector("#editorModal");
+      const editorForm = document.querySelector("#editorForm");
+      const editorResetButton = document.querySelector("#editorResetButton");
+      const editorCloseButton = document.querySelector("#editorCloseButton");
 
       let levelIndex = 0;
-      let activeLevel = LEVELS[levelIndex];
+      let activeLevel = levels[levelIndex];
       let answer = activeLevel.answer.toUpperCase();
       let currentGuess = "";
       let currentRow = 0;
       let gameOver = false;
       let keyStatus = {};
       let resultAction = "retry";
+      let logoTapCount = 0;
+      let logoTapTimer = 0;
+      let editorCredentials = null;
 
       brandLogo.addEventListener("load", () => {
         brandLogo.nextElementSibling.classList.add("hidden");
@@ -729,6 +864,180 @@
       brandLogo.addEventListener("error", () => {
         brandLogo.classList.add("hidden");
       });
+
+      function cleanLevel(level, fallback) {
+        const source = level || fallback;
+        const cleanAnswer = String(source.answer || fallback.answer).replace(/[^a-z]/gi, "").toUpperCase();
+
+        return {
+          prefix: String(source.prefix || "").replace(/\s/g, "").toUpperCase(),
+          answer: cleanAnswer || fallback.answer,
+          suffix: String(source.suffix || "").replace(/\s/g, "").toUpperCase(),
+          hint: String(source.hint || fallback.hint)
+        };
+      }
+
+      function loadSavedLevels() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+          if (!Array.isArray(saved)) return DEFAULT_LEVELS.map((level) => ({ ...level }));
+
+          return DEFAULT_LEVELS.map((fallback, index) => cleanLevel(saved[index], fallback));
+        } catch (error) {
+          return DEFAULT_LEVELS.map((level) => ({ ...level }));
+        }
+      }
+
+      async function saveLevels(nextLevels) {
+        levels = DEFAULT_LEVELS.map((fallback, index) => cleanLevel(nextLevels[index], fallback));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(levels));
+
+        if (!API_BASE) return;
+
+        const response = await fetch(`${API_BASE}/api/quiz`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editorCredentials?.id,
+            password: editorCredentials?.password,
+            levels
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error("Gagal menyimpan quiz ke server.");
+        }
+      }
+
+      async function loadSharedLevels() {
+        if (!API_BASE) return;
+
+        try {
+          const response = await fetch(`${API_BASE}/api/quiz`, { cache: "no-store" });
+          if (!response.ok) throw new Error("Could not fetch shared quiz");
+
+          const data = await response.json();
+          levels = DEFAULT_LEVELS.map((fallback, index) => cleanLevel(data.levels?.[index], fallback));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(levels));
+          loadLevel(0, !intro.classList.contains("hidden"));
+        } catch (error) {
+          setMessage("Quiz server belum tersambung. Memakai quiz di browser ini.");
+        }
+      }
+
+      function isEditorAuthenticated() {
+        try {
+          return sessionStorage.getItem(AUTH_SESSION_KEY) === "true";
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function setEditorAuthenticated() {
+        try {
+          sessionStorage.setItem(AUTH_SESSION_KEY, "true");
+        } catch (error) {
+          return;
+        }
+      }
+
+      function escapeAttribute(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function renderEditorForm() {
+        editorForm.innerHTML = "";
+
+        levels.forEach((level, index) => {
+          const fieldset = document.createElement("section");
+          fieldset.className = "editor-level";
+          fieldset.innerHTML = `
+            <h3>Level ${index + 1}</h3>
+            <div class="editor-grid">
+              <div class="field">
+                <label for="level-${index}-prefix">Prefix</label>
+                <input id="level-${index}-prefix" data-index="${index}" data-field="prefix" value="${escapeAttribute(level.prefix)}" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="level-${index}-suffix">Suffix</label>
+                <input id="level-${index}-suffix" data-index="${index}" data-field="suffix" value="${escapeAttribute(level.suffix)}" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="level-${index}-answer">Jawaban</label>
+                <input id="level-${index}-answer" data-index="${index}" data-field="answer" value="${escapeAttribute(level.answer)}" autocomplete="off" required>
+              </div>
+              <div class="field full">
+                <label for="level-${index}-hint">Hint</label>
+                <input id="level-${index}-hint" data-index="${index}" data-field="hint" value="${escapeAttribute(level.hint)}" autocomplete="off" required>
+              </div>
+            </div>
+          `;
+          editorForm.appendChild(fieldset);
+        });
+
+        const saveButton = document.createElement("button");
+        saveButton.className = "start-button";
+        saveButton.type = "submit";
+        saveButton.textContent = "Simpan Quiz";
+        editorForm.appendChild(saveButton);
+      }
+
+      function openEditor() {
+        renderEditorForm();
+        editorModal.classList.remove("hidden");
+      }
+
+      function openLogin() {
+        loginError.textContent = "";
+        loginForm.reset();
+        loginModal.classList.remove("hidden");
+        window.setTimeout(() => loginId.focus(), 50);
+      }
+
+      function closeLogin() {
+        loginModal.classList.add("hidden");
+      }
+
+      function requestEditorAccess() {
+        if (isEditorAuthenticated()) {
+          openEditor();
+          return;
+        }
+
+        openLogin();
+      }
+
+      function handleLogoSecretTap() {
+        window.clearTimeout(logoTapTimer);
+        logoTapCount += 1;
+
+        if (logoTapCount >= 5) {
+          logoTapCount = 0;
+          requestEditorAccess();
+          return;
+        }
+
+        logoTapTimer = window.setTimeout(() => {
+          logoTapCount = 0;
+        }, 1800);
+      }
+
+      function closeEditor() {
+        editorModal.classList.add("hidden");
+      }
+
+      function readEditorLevels() {
+        return levels.map((level) => ({ ...level })).map((level, index) => {
+          editorForm.querySelectorAll(`[data-index="${index}"]`).forEach((input) => {
+            level[input.dataset.field] = input.value;
+          });
+          return level;
+        });
+      }
 
       function wordLength() {
         return answer.length;
@@ -745,7 +1054,7 @@
 
       function renderCouponDetails() {
         document.documentElement.style.setProperty("--word-length", wordLength());
-        levelLabel.textContent = `Level ${levelIndex + 1} dari ${LEVELS.length}`;
+        levelLabel.textContent = `Level ${levelIndex + 1} dari ${levels.length}`;
         couponPattern.textContent = hiddenCouponPattern();
         hintText.textContent = `Hint: ${activeLevel.hint}`;
       }
@@ -780,7 +1089,7 @@
       }
 
       function showSuccessModal() {
-        const isFinalLevel = levelIndex === LEVELS.length - 1;
+        const isFinalLevel = levelIndex === levels.length - 1;
 
         successTitle.textContent = "Selamat, kamu berhasil!";
         successMessage.textContent = "Langsung masukkan kode kupon di aplikasi IndoMoney untuk claim diskonnya.";
@@ -953,6 +1262,8 @@
 
       function handleInput(value) {
         if (intro && !intro.classList.contains("hidden")) return;
+        if (loginModal && !loginModal.classList.contains("hidden")) return;
+        if (editorModal && !editorModal.classList.contains("hidden")) return;
         if (gameOver && value !== "ENTER") return;
 
         if (value === "ENTER") {
@@ -974,7 +1285,7 @@
 
       function loadLevel(nextLevelIndex, showIntro = false) {
         levelIndex = nextLevelIndex;
-        activeLevel = LEVELS[levelIndex];
+        activeLevel = levels[levelIndex];
         answer = activeLevel.answer.toUpperCase();
         currentGuess = "";
         currentRow = 0;
@@ -1002,7 +1313,7 @@
       }
 
       function nextLevel() {
-        loadLevel(Math.min(levelIndex + 1, LEVELS.length - 1), false);
+        loadLevel(Math.min(levelIndex + 1, levels.length - 1), false);
         window.scrollTo({ top: 0, behavior: "auto" });
         setMessage("Tebakan 1 dari 6.");
       }
@@ -1015,6 +1326,10 @@
       }
 
       document.addEventListener("keydown", (event) => {
+        if (event.target instanceof HTMLElement && event.target.matches("input, textarea")) return;
+        if (loginModal && !loginModal.classList.contains("hidden")) return;
+        if (editorModal && !editorModal.classList.contains("hidden")) return;
+
         const key = event.key.toUpperCase();
         if (key === "ENTER") {
           handleInput("ENTER");
@@ -1033,6 +1348,65 @@
 
       helpButton.addEventListener("click", () => {
         intro.classList.remove("hidden");
+      });
+
+      brandMark.addEventListener("click", () => {
+        handleLogoSecretTap();
+      });
+
+      loginCloseButton.addEventListener("click", () => {
+        closeLogin();
+      });
+
+      loginForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        if (loginId.value.trim() === EDITOR_ID && loginPassword.value === EDITOR_PASSWORD) {
+          editorCredentials = {
+            id: loginId.value.trim(),
+            password: loginPassword.value
+          };
+          setEditorAuthenticated();
+          closeLogin();
+          openEditor();
+          return;
+        }
+
+        loginError.textContent = "ID atau password salah.";
+        loginPassword.value = "";
+        loginPassword.focus();
+      });
+
+      editorCloseButton.addEventListener("click", () => {
+        closeEditor();
+      });
+
+      editorResetButton.addEventListener("click", () => {
+        localStorage.removeItem(STORAGE_KEY);
+        levels = DEFAULT_LEVELS.map((level) => ({ ...level }));
+        loadLevel(0, false);
+        renderEditorForm();
+        setMessage("Quiz dikembalikan ke default.");
+      });
+
+      editorForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const nextLevels = readEditorLevels();
+        const invalidLevel = nextLevels.findIndex((level) => !/[a-z]/i.test(level.answer));
+
+        if (invalidLevel !== -1) {
+          setMessage(`Jawaban level ${invalidLevel + 1} harus berisi huruf.`);
+          return;
+        }
+
+        try {
+          await saveLevels(nextLevels);
+          loadLevel(0, false);
+          closeEditor();
+          setMessage(API_BASE ? "Quiz berhasil disimpan ke server." : "Quiz berhasil disimpan. Mulai dari level 1.");
+        } catch (error) {
+          setMessage(error.message || "Gagal menyimpan quiz.");
+        }
       });
 
       resetButton.addEventListener("click", () => {
@@ -1054,6 +1428,7 @@
       });
 
       resetGame(true);
+      loadSharedLevels();
     </script>
   </body>
 </html>
