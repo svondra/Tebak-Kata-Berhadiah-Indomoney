@@ -905,6 +905,13 @@
         });
 
         if (!response.ok) {
+          if (response.status === 401) {
+            sessionStorage.removeItem(AUTH_SESSION_KEY);
+            sessionStorage.removeItem(`${AUTH_SESSION_KEY}-credentials`);
+            editorCredentials = null;
+            throw new Error("Login editor sudah habis. Tutup editor, login lagi, lalu simpan ulang.");
+          }
+
           throw new Error("Gagal menyimpan quiz ke server.");
         }
       }
@@ -927,15 +934,23 @@
 
       function isEditorAuthenticated() {
         try {
-          return sessionStorage.getItem(AUTH_SESSION_KEY) === "true";
+          if (sessionStorage.getItem(AUTH_SESSION_KEY) !== "true") return false;
+          if (!API_BASE) return true;
+
+          const savedCredentials = JSON.parse(sessionStorage.getItem(`${AUTH_SESSION_KEY}-credentials`) || "null");
+          if (!savedCredentials?.id || !savedCredentials?.password) return false;
+
+          editorCredentials = savedCredentials;
+          return true;
         } catch (error) {
           return false;
         }
       }
 
-      function setEditorAuthenticated() {
+      function setEditorAuthenticated(credentials) {
         try {
           sessionStorage.setItem(AUTH_SESSION_KEY, "true");
+          sessionStorage.setItem(`${AUTH_SESSION_KEY}-credentials`, JSON.stringify(credentials));
         } catch (error) {
           return;
         }
@@ -1366,7 +1381,7 @@
             id: loginId.value.trim(),
             password: loginPassword.value
           };
-          setEditorAuthenticated();
+          setEditorAuthenticated(editorCredentials);
           closeLogin();
           openEditor();
           return;
