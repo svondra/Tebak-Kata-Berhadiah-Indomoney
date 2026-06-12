@@ -1,0 +1,22 @@
+{
+  "levels": [
+    {
+      "prefix": "IDM",
+      "answer": "HUJAN",
+      "suffix": "CUAN",
+      "hint": "rintik-rintik membuat basah"
+    },
+    {
+      "prefix": "ID",
+      "answer": "KUPON",
+      "suffix": "BONUS",
+      "hint": "Sering dibagi-bagi sama IndoMoney"
+    },
+    {
+      "prefix": "IDHUJAN",
+      "answer": "HEMAT",
+      "suffix": "",
+      "hint": "Tidak boros"
+    }
+  ]
+}
